@@ -1,0 +1,23 @@
+[package]
+name = "nod"
+version = "0.1.0"
+authors = ["Rasmus Kildevæld <rasmuskildevaeld@gmail.com>"]
+
+[dependencies]
+clap = "2"
+reqwest = "0.7.3"
+rustc-serialize = "0.3"
+libarchive = "0.1.1"
+url = "1.5.1"
+colored = "1.4"
+pbr = "*"
+
+
+[lib]
+name = "nod"
+path = "src/nod/lib.rs"
+test = false
+
+[[bin]]
+name = "nod-cli"
+path = "src/nod-cli/main.rs"

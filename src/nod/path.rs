@@ -1,7 +1,7 @@
 
 use std::path::{Path, PathBuf};
 use std::fs;
-use error::{NodError,Result};
+use super::error::{NodError,Result};
 pub struct WorkDir {
     root: PathBuf,
 }
@@ -11,13 +11,13 @@ impl WorkDir {
         WorkDir { root: path.as_ref().to_owned() }
     }
 
-    fn ensure_path(&self, path: &PathBuf) -> Result<()> {
+    pub(crate) fn ensure_path(&self, path: &PathBuf) -> Result<()> {
         if !path.is_dir() {
             if path.is_file() {
                 return Err(NodError::Other("path is a file"));
             }
 
-            try!(fs::create_dir_all(&path));
+            fs::create_dir_all(&path)?;
         }
 
         Ok(())
@@ -30,7 +30,7 @@ impl WorkDir {
         self.ensure_path(&self.destination())?;
 
         if !self.root.is_absolute() {
-            self.root = try!(fs::canonicalize(&self.root));
+            self.root = fs::canonicalize(&self.root)?;
         }
 
         Ok(())
@@ -42,6 +42,10 @@ impl WorkDir {
 
     pub fn destination(&self) -> PathBuf {
         self.path("node")
+    }
+
+    pub fn current(&self) -> PathBuf {
+        self.path("current")
     }
 
     fn path(&self, end: &str) -> PathBuf {

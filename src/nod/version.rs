@@ -1,6 +1,7 @@
-use platform::{Platform, Arch};
+use super::platform::{Arch, Platform};
+use std::fmt;
 
-#[derive(RustcDecodable, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Version {
     pub version: String,
     date: String,
@@ -24,6 +25,20 @@ impl Version {
             format!("node-{}-{}-{}.tar.gz", self.version, platform, arch)
         }
 
+    }
+
+    pub fn get_dist_name(&self, platform: &Platform, arch: &Arch, source: bool) -> String {
+        if source {
+            format!("node-{}", self.version)
+        } else {
+            format!("node-{}-{}-{}", self.version, platform, arch)
+        }
+    }
+}
+
+impl fmt::Display for Version {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.version)
     }
 }
 

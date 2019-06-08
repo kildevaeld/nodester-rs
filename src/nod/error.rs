@@ -7,7 +7,7 @@ use std::string;
 use url;
 use reqwest;
 
-use rustc_serialize::json;
+use serde_json::error::Error as JsonError;
 use libarchive::error::ArchiveError;
 
 pub type Result<T> = result::Result<T, NodError>;
@@ -17,7 +17,7 @@ pub enum NodError {
     Io(io::Error),
     Http(reqwest::Error),
     Url(url::ParseError),
-    Decode(json::DecoderError),
+    Decode(JsonError),
     Other(&'static str),
     Archive(ArchiveError),
 }
@@ -46,8 +46,8 @@ impl From<string::FromUtf8Error> for NodError {
     }
 }
 
-impl From<json::DecoderError> for NodError {
-    fn from(err: json::DecoderError) -> NodError {
+impl From<JsonError> for NodError {
+    fn from(err: JsonError) -> NodError {
         NodError::Decode(err)
     }
 }

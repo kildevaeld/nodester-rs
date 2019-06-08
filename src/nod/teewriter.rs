@@ -1,31 +1,31 @@
-use std::io::{Write, Result};
 
-pub struct TeeWriter<T, U> {
-    file: T,
-    progress: U,
+use super::node::Progress;
+use std::io::{Result, Write};
+pub struct ProgressWriter<'a, T, U> {
+    file: &'a mut T,
+    progress: &'a mut U,
+    total: u64,
 }
 
-impl<'a, T: Write, U: Write> TeeWriter<T, U> {
-    pub fn new(file: T, progress: U) -> TeeWriter<T, U> {
-        TeeWriter {
+impl<'a, T: Write, U: Progress> ProgressWriter<'a, T, U> {
+    pub fn new(file: &'a mut T, progress: &'a mut U, total: u64) -> ProgressWriter<'a, T, U> {
+        ProgressWriter {
             file: file,
             progress: progress,
+            total,
         }
     }
 }
 
-impl<T: Write, U: Write> Write for TeeWriter<T, U> {
+impl<'a, T: Write, U: Progress> Write for ProgressWriter<'a, T, U> {
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
-        println!("write");
-        //let size = self.file.write(buf)?;
-        self.progress.write(buf)?;
-        //Ok(size as usize)
-        Ok(buf.len())
+        self.progress.progress(buf.len() as u64, self.total);
+        Ok(self.file.write(buf)?)
     }
 
     fn flush(&mut self) -> Result<()> {
         self.file.flush()?;
-        self.progress.flush()?;
+        //self.progress.flush()?;
         Ok(())
     }
 }

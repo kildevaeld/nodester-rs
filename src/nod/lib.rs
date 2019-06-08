@@ -1,7 +1,6 @@
-extern crate reqwest;
-extern crate rustc_serialize;
-extern crate url;
-extern crate libarchive;
+
+#[macro_use]
+extern crate serde;
 
 pub mod error;
 mod platform;
@@ -15,7 +14,7 @@ mod teewriter;
 pub use version::Version;
 pub use platform::{Platform, Arch};
 pub use error::{Result,NodError};
-pub use node::Node;
+pub use node::{Node, Progress};
 
 #[cfg(test)]
 mod tests {

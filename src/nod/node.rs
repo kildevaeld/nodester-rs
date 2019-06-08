@@ -1,20 +1,42 @@
+use super::error::{NodError, Result};
+use super::fetch;
+use super::path::WorkDir;
+use super::platform::{Arch, Platform};
+use super::teewriter::ProgressWriter;
+use super::utils::{getarch, getplatform};
+use super::version::Version;
 
+use libarchive::archive::{self, ReadFilter, ReadFormat};
+use libarchive::reader::Builder;
+use libarchive::writer;
+
+use std::fs;
+use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use path::WorkDir;
-use std::fs::File;
-use std::fs;
-use utils::{getarch, getplatform};
+use serde_json;
+
 use url::Url;
-use rustc_serialize::json;
-use fetch;
-use teewriter::TeeWriter;
-use version::Version;
-use platform::{Platform, Arch};
-use error::Result;
-use reqwest::header::ContentLength;
+
+#[cfg(windows)]
+fn symlink<S: AsRef<Path>, D: AsRef<Path>>(source: S, dest: D) -> std::io::Result<()> {
+    std::os::windows::fs::symlink_dir(source, dest)
+}
+
+#[cfg(unix)]
+fn symlink<S: AsRef<Path>, D: AsRef<Path>>(source: S, dest: D) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(source, dest)
+}
+
+
+// use reqwest::header::CONTENT;
 
 const NODE_URL: &'static str = "http://nodejs.org";
+
+
+pub trait Progress {
+    fn progress(&mut self, progress: u64, total: u64);
+}
 
 
 pub struct Node {
@@ -65,7 +87,6 @@ impl Node {
 
         None
 
-
     }
 
     pub fn download_size(&self, version: &Version) -> Result<(u64)> {
@@ -73,12 +94,12 @@ impl Node {
         let mut url = self.url.clone();
         let path = version.get_url(&self.platform, &self.arch, false);
         url.set_path(&*path);
-        println!("url {}", url);
+
         let headers = fetch::download_header(url)?;
 
         let len = headers
-            .get::<ContentLength>()
-            .map(|ct_len| **ct_len)
+            .get("Content-Length")
+            .map(|ct_len| ct_len.to_str().unwrap().parse::<u64>().unwrap())
             .unwrap_or(0);
 
 
@@ -86,7 +107,7 @@ impl Node {
 
     }
 
-    pub fn download<T: Write>(&self, version: &Version, write: T) -> Result<()> {
+    pub fn download<P: Progress>(&self, version: &Version, write: &mut P) -> Result<()> {
 
         let mut path = self.path.cache();
         path.push(version.get_cache_name(&self.platform, &self.arch, false));
@@ -95,16 +116,66 @@ impl Node {
             return Ok(());
         }
 
-        let file = File::create(path)?;
+        let size = self.download_size(version)?;
 
-        let mut writer = TeeWriter::new(&file, write);
+        let mut file = File::create(path)?;
 
-        let mut url = self.url.clone();
-        url.set_path(&*version.get_url(&self.platform, &self.arch, false));
 
-        fetch::download_to(url.as_str(), &file)?;
+        {
+            let writer = ProgressWriter::new(&mut file, write, size as u64);
+            let mut url = self.url.clone();
+            url.set_path(&*version.get_url(&self.platform, &self.arch, false));
 
-        writer.flush();
+            fetch::download_to(url.as_str(), writer)?;
+        }
+
+        file.flush()?;
+
+        Ok(())
+    }
+
+    pub fn unpack(&self, version: &Version) -> Result<()> {
+
+        let mut path = self.path.cache();
+        path.push(version.get_cache_name(&self.platform, &self.arch, false));
+
+        if !path.exists() {
+            return Err(NodError::Other("version not downloaded"));
+        }
+
+
+        let mut builder = Builder::new();
+
+        builder.support_format(ReadFormat::All)?;
+        builder.support_filter(ReadFilter::All)?;
+
+        let mut reader = builder.open_file(path)?;
+
+        let mut opts = archive::ExtractOptions::new();
+        opts.add(archive::ExtractOption::Time);
+
+        let writer = writer::Disk::new();
+
+        let out_path = self.path.destination();
+
+
+        writer.write(&mut reader, Some(out_path.to_string_lossy().as_ref()))?;
+
+
+        Ok(())
+    }
+
+    pub fn link(&self, version: &Version) -> Result<()> {
+        let mut path = self.path.destination();
+        path.push(version.get_dist_name(&self.platform, &self.arch, false));
+
+        let current = self.path.current();
+        if current.exists() {
+            std::fs::remove_file(&current)?;
+        }
+
+        symlink(path, current)?;
+
 
         Ok(())
     }
@@ -115,8 +186,8 @@ impl Node {
 
         let result = fetch::download(u.as_str())?;
 
-        let as_string = try!(String::from_utf8(result));
-        let decoded: Vec<Version> = try!(json::decode(&as_string));
+        //let as_string = String::from_utf8(result)?;
+        let decoded: Vec<Version> = serde_json::from_slice(&result)?;
         Ok(decoded)
 
     }
@@ -124,15 +195,19 @@ impl Node {
     pub fn installed_versions(&self) -> Result<Vec<String>> {
         let mut dest = self.path.destination();
         let mut out = Vec::new();
-        for entry in try!(dest.read_dir()) {
+        for entry in dest.read_dir()? {
             let entry = entry?;
             let path = entry.path();
             if !path.is_dir() {
                 continue;
             }
             let s = path.file_name().unwrap().to_str().unwrap().to_string();
-            out.push(s);
-            //print!("{}\n", path.file_name().unwrap().to_str().unwrap());
+            let k = s
+                .replace("node", "")
+                .replace(self.platform.to_string().as_str(), "")
+                .replace(self.arch.to_string().as_str(), "")
+                .replace("-", "");
+            out.push(k);
 
         }
 
@@ -144,12 +219,12 @@ impl Node {
 
         let cacheDir = self.path.cache();
 
-        let files = try!(cacheDir.read_dir());
+        let files = cacheDir.read_dir()?;
 
         let mut size: u64 = 0;
 
         for file in files {
-            let entry = try!(file);
+            let entry = file?;
             let path = entry.path();
 
             let meta = entry.metadata()?;
@@ -157,7 +232,7 @@ impl Node {
             size += meta.len();
 
             if path.is_file() {
-                try!(fs::remove_file(path));
+                fs::remove_file(path);
             }
 
         }

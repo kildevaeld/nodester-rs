@@ -1,7 +1,7 @@
 
 
-use error::{Result, NodError};
-use platform::{Platform, Arch};
+use super::error::{Result, NodError};
+use super::platform::{Platform, Arch};
 
 pub fn getplatform() -> Result<Platform> {
     if cfg!(target_os = "macos") {

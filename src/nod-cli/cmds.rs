@@ -1,8 +1,24 @@
 
-use pbr::{ProgressBar, Units};
-use nod::{Node, Result, NodError};
 use colored::*;
-use progress::Progress;
+use nod::{NodError, Node, Progress, Result};
+use pbr::{ProgressBar, Units};
+
+struct CliProgress<'a> {
+    pb: &'a mut ProgressBar<std::io::Stdout>,
+}
+
+impl<'a> CliProgress<'a> {
+    pub fn new(pb: &'a mut ProgressBar<std::io::Stdout>) -> CliProgress<'a> {
+        CliProgress { pb }
+    }
+}
+
+impl<'a> Progress for CliProgress<'a> {
+    fn progress(&mut self, progress: u64, _total: u64) {
+        self.pb.add(progress);
+    }
+}
+
 
 pub fn use_cmd(node: &Node, version: &str) -> Result<()> {
 
@@ -16,26 +32,29 @@ pub fn use_cmd(node: &Node, version: &str) -> Result<()> {
 
     let size = node.download_size(&v)?;
 
-
-
-
     let mut pb = ProgressBar::new(size);
 
     pb.set_units(Units::Bytes);
     pb.set_width(Some(80));
     println!("Downloading: {}", v.version.bold());
     {
-        let progress = Progress::new(&mut pb);
-        node.download(&v, progress)?;
+        let mut progress = CliProgress::new(&mut pb);
+        node.download(&v, &mut progress)?;
     }
 
-    pb.finish_print("Download ... done");
+    let done = format!("Download  ... {}", "done".green());
+    pb.finish_print(&done);
+
+    print!("\nUnpacking ... ");
+    node.unpack(&v)?;
+    print!("{}", "done".green());
+    node.link(&v)?;
+
     Ok(())
 }
 
 
 pub fn run_cmd(node: &Node) -> Result<()> {
-
 
     Ok(())
 }

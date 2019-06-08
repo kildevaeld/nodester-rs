@@ -1,25 +1,30 @@
 #[macro_use]
 extern crate clap;
-extern crate nod;
+
 extern crate colored;
+
+extern crate dirs;
+extern crate nod;
 extern crate pbr;
 
 mod cmds;
 mod progress;
 
-use std::io::Write;
-use std::env;
-use std::path::PathBuf;
-use clap::ArgMatches;
-use nod::{Node, error};
-use cmds::*;
-use progress::Progress;
 
-const DEFAULT_ROOT: &'static str = ".nodester2";
+use clap::ArgMatches;
+
+use cmds::*;
+use nod::{error, Node};
+use std::env;
+use std::io::Write;
+use std::path::PathBuf;
+use std::str::FromStr;
+
+const DEFAULT_ROOT: &'static str = ".nodester";
 const ENV_ROOT_KEY: &'static str = "NODESTER_ROOT";
 
 fn get_nodester_root() -> Option<PathBuf> {
-    let mut homedir = env::home_dir();
+    let mut homedir = dirs::home_dir();
     if let Some(h) = homedir {
         let mut b = h.clone();
         b.push(DEFAULT_ROOT);
@@ -45,7 +50,11 @@ fn wrapped_main(matches: ArgMatches) -> nod::Result<()> {
     if let Some(matches) = matches.subcommand_matches("use") {
         return use_cmd(&node, matches.value_of("files").unwrap());
     } else if let Some(matches) = matches.subcommand_matches("listremote") {
-        return listremote_cmd(&node, 10);
+        let count = match matches.value_of("count") {
+            Some(c) => i32::from_str(c).unwrap_or(10),
+            None => 10,
+        };
+        return listremote_cmd(&node, count as usize);
     } else if let Some(matches) = matches.subcommand_matches("list") {
         return list_cmd(&node);
     } else if matches.is_present("version") {
@@ -58,15 +67,14 @@ fn wrapped_main(matches: ArgMatches) -> nod::Result<()> {
 }
 
 fn main() {
-
-    let matches = clap_app!(node_app => 
+    let matches = clap_app!(node_app =>
         (version: "0.1")
         (author: "Rasmus Kildevæld")
         (about: "")
         (@arg version: "run version")
         (@subcommand listremote =>
             (aliases: &["lsr"])
-            (@arg count: -c --count)
+            (@arg count: -c --count +takes_value)
         )
         (@subcommand list =>
             (aliases: &["ls"])
@@ -76,11 +84,11 @@ fn main() {
             (@arg files: +required "")
         )
         (@subcommand clear =>)
-    ).get_matches();
+    )
+    .get_matches();
 
     if let Err(ref err) = wrapped_main(matches) {
         writeln!(&mut std::io::stderr(), "{}", err).unwrap();
     }
-
 
 }

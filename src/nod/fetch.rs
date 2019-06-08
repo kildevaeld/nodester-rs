@@ -1,10 +1,10 @@
 
 use reqwest;
 use reqwest::StatusCode;
-use reqwest::header::Headers;
+use reqwest::header::HeaderMap;
 use std::io;
 use std::io::Write;
-use error::{NodError, Result};
+use super::error::{NodError, Result};
 use url::Url;
 
 
@@ -24,7 +24,6 @@ pub fn download_to<T: Write>(url: &str, mut writer: T) -> Result<()> {
     let mut res = reqwest::get(url)?;
 
     if !res.status().is_success() {
-        println!("{}", res.status());
         return Err(NodError::Other("status not"));
     }
 
@@ -33,7 +32,7 @@ pub fn download_to<T: Write>(url: &str, mut writer: T) -> Result<()> {
     Ok(())
 }
 
-pub fn download_header(url: Url) -> Result<Headers> {
+pub fn download_header(url: Url) -> Result<HeaderMap> {
 
     let res = reqwest::get(url.as_str())?;
 

@@ -1,6 +1,7 @@
 use pbr::ProgressBar;
 use std::io::{Write, Result};
 use std::io;
+
 pub struct Progress<'a> {
     pb: &'a mut ProgressBar<io::Stdout>,
 }

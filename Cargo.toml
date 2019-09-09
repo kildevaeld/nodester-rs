@@ -33,4 +33,4 @@ lto = true
 name = "nodester"
 section = "utility"
 priority = "optional"
-description = "Node version manager"
+extended-description = "Node version manager"
